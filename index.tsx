@@ -1,11 +1,12 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
 // Set up the PDF.js worker.
-import * as pdfjs from 'pdfjs-dist';
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+import { GlobalWorkerOptions, version } from 'pdfjs-dist';
+
+// Ensure worker is loaded from a CDN that matches the installed version to avoid bundling issues
+GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
 
 
 const rootElement = document.getElementById('root');
