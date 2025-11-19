@@ -1,0 +1,49 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nasajon Payslip Extractor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#1e40af',
+              secondary: '#1d4ed8',
+              accent: '#3b82f6',
+              neutral: '#f3f4f6',
+            },
+            animation: {
+              blink: 'blink-animation 1s infinite',
+            },
+            keyframes: {
+              'blink-animation': {
+                '0%, 100%': { color: '#f59e0b' }, // amber-500
+                '50%': { color: '#ef4444' },     // red-500
+              }
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
+    "pdfjs-dist/": "https://aistudiocdn.com/pdfjs-dist@^5.4.296/",
+    "pdfjs-dist": "https://aistudiocdn.com/pdfjs-dist@^5.4.296"
+  }
+}
+</script>
+</head>
+  <body class="bg-neutral text-gray-800">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

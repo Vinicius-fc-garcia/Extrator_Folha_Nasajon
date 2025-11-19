@@ -1,0 +1,5 @@
+{
+  "name": "Nasajon Payslip Extractor",
+  "description": "An application to extract data from Nasajon PDF payslips. It identifies the 'Resumo Geral da Folha de Pagamento por Rubrica' table and the 'Salário Líquido Total', then allows downloading the data as an Excel file. Includes a visual debugger for the value extraction process.",
+  "requestFramePermissions": []
+}
