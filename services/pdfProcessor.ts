@@ -1,6 +1,19 @@
-import * as pdfjs from 'pdfjs-dist';
-import type { TextItem, PDFPageProxy, PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
+import { getDocument } from 'pdfjs-dist';
 import type { PaystubRow, PaystubTotals, ExtractionResult } from '../types';
+
+// Define types locally to avoid 'Module not found' errors during build due to deep imports in pdfjs-dist
+interface TextItem {
+  str: string;
+  transform: number[];
+  width: number;
+  height: number;
+  // allow other props
+  [key: string]: any;
+}
+
+// Use 'any' for PDF proxies to bypass strict type checking during build which often fails with pdfjs-dist v4
+type PDFDocumentProxy = any;
+type PDFPageProxy = any;
 
 const MONETARY_REGEX = /^\d{1,3}(?:\.\d{3})*,\d{2}$/;
 const MONETARY_REGEX_GLOBAL = /\d{1,3}(?:\.\d{3})*,\d{2}/g;
@@ -26,7 +39,7 @@ const transformToWord = (item: TextItem): Word => {
 
 const getWordsFromPage = async (page: PDFPageProxy): Promise<Word[]> => {
   const content = await page.getTextContent();
-  return content.items.filter(item => 'str' in item && item.str.trim() !== '').map(item => transformToWord(item as TextItem));
+  return content.items.filter((item: any) => 'str' in item && item.str.trim() !== '').map((item: any) => transformToWord(item as TextItem));
 };
 
 const groupWordsIntoLines = (words: Word[], yTolerance = 5): Word[][] => {
@@ -195,13 +208,13 @@ async function extractTotaisBlock(pdf: PDFDocumentProxy, startPageIdx: number): 
 
 export const processPdf = async (file: File): Promise<ExtractionResult> => {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument(arrayBuffer).promise;
+  const pdf = await getDocument(arrayBuffer).promise;
   
   let startPageIdx = -1;
   for (let i = 0; i < pdf.numPages; i++) {
     const page = await pdf.getPage(i + 1);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items.map(item => 'str' in item ? item.str : '').join('');
+    const pageText = textContent.items.map((item: any) => 'str' in item ? item.str : '').join('');
     if (pageText.includes('Resumo Geral da Folha de Pagamento por Rubrica')) {
       startPageIdx = i;
       break;
