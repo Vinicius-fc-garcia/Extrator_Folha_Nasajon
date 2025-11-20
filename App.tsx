@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import type { ExtractionResult, PaystubRow } from './types';
 import { processPdf } from './services/pdfProcessor';
@@ -142,10 +141,11 @@ const normalizeText = (text: string): string => {
 const getRowStyle = (description: string): string => {
     const descNorm = normalizeText(description);
 
-    // For 13th Salary, only highlight the main payment and the advance repayment.
-    // Ignore tax deductions (INSS, IRRF) and other deductions like alimony (pensao alimenticia).
+    // Strict check for 13th Salary (Adiantamento or 13o Salario)
+    const isTarget13th = descNorm.includes('adiantamento de 13o') || descNorm.includes('13o salario');
     const isIgnored13thDiscount = descNorm.includes('inss') || descNorm.replace(/\./g, '').includes('irrf') || descNorm.includes('pensao alimenticia');
-    if (descNorm.includes("13o") && !isIgnored13thDiscount) return "text-blue-700";
+    
+    if (isTarget13th && !isIgnored13thDiscount) return "text-blue-700";
     
     if (descNorm.includes("cesta")) return "text-purple-700";
     if (descNorm.includes("alimentacao")) return "text-red-700";
@@ -179,10 +179,11 @@ const ResultsDisplay: React.FC<{ result: ExtractionResult; onDownload: () => voi
                 wasCalculated = true;
             }
 
-            // Rule: for 13th salary, only sum the main payment and subtract the advance repayment discount.
-            // Ignore taxes (INSS, IRRF) and other deductions (e.g., pensao alimenticia).
+            // Strict check for 13th Salary (Adiantamento or 13o Salario)
+            const isTarget13th = descNorm.includes('adiantamento de 13o') || descNorm.includes('13o salario');
             const isIgnored13thDiscount = descNorm.includes('inss') || descNorm.replace(/\./g, '').includes('irrf') || descNorm.includes('pensao alimenticia');
-            if (descNorm.includes('13o') && !isIgnored13thDiscount) {
+
+            if (isTarget13th && !isIgnored13thDiscount) {
                 if (rendimento > 0) decimoTerceiroValues.push(rendimento);
                 if (desconto > 0) decimoTerceiroValues.push(-desconto);
                 wasCalculated = true;
