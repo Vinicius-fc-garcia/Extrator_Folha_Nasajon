@@ -58,11 +58,14 @@ export const buildExcel = (rows: PaystubRow[], totals: PaystubTotals): Blob => {
     }
 
     // Rule: for 13th salary, strictly look for "Adiantamento de 13º" and "13º Salário".
-    // Still need to ignore taxes (INSS, IRRF) that might mention 13th salary.
+    // Exceptions:
+    // 1. Ignore taxes (INSS, IRRF) that might mention 13th salary.
+    // 2. Ignore "Desconto de Adiantamento de..."
     const isTarget13th = descNorm.includes('adiantamento de 13o') || descNorm.includes('13o salario');
     const isIgnored13thDiscount = descNorm.includes('inss') || descNorm.replace(/\./g, '').includes('irrf') || descNorm.includes('pensao alimenticia');
+    const isExcludedAdiantamento = descNorm.includes('desconto de adiantamento de');
     
-    if (isTarget13th && !isIgnored13thDiscount) {
+    if (isTarget13th && !isIgnored13thDiscount && !isExcludedAdiantamento) {
       if (rendimento > 0) decimoTerceiroValues.push(rendimento);
       if (desconto > 0) decimoTerceiroValues.push(-desconto);
     }
@@ -169,8 +172,9 @@ export const buildExcel = (rows: PaystubRow[], totals: PaystubTotals): Blob => {
 
     const isTarget13th = descValue.includes('adiantamento de 13o') || descValue.includes('13o salario');
     const isIgnored13thDiscount = descValue.includes('inss') || descValue.replace(/\./g, '').includes('irrf') || descValue.includes('pensao alimenticia');
+    const isExcludedAdiantamento = descValue.includes('desconto de adiantamento de');
 
-    if (isTarget13th && !isIgnored13thDiscount) {
+    if (isTarget13th && !isIgnored13thDiscount && !isExcludedAdiantamento) {
         rowFontColor = { rgb: "0070C0" }; // Blue
     } else if (descValue.includes("cesta")) {
         rowFontColor = { rgb: "7030A0" }; // Purple
