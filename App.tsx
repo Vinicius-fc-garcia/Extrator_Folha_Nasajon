@@ -144,8 +144,9 @@ const getRowStyle = (description: string): string => {
     // Strict check for 13th Salary (Adiantamento or 13o Salario)
     const isTarget13th = descNorm.includes('adiantamento de 13o') || descNorm.includes('13o salario');
     const isIgnored13thDiscount = descNorm.includes('inss') || descNorm.replace(/\./g, '').includes('irrf') || descNorm.includes('pensao alimenticia');
+    const isExcludedAdiantamento = descNorm.includes('desconto de adiantamento de');
     
-    if (isTarget13th && !isIgnored13thDiscount) return "text-blue-700";
+    if (isTarget13th && !isIgnored13thDiscount && !isExcludedAdiantamento) return "text-blue-700";
     
     if (descNorm.includes("cesta")) return "text-purple-700";
     if (descNorm.includes("alimentacao")) return "text-red-700";
@@ -182,8 +183,9 @@ const ResultsDisplay: React.FC<{ result: ExtractionResult; onDownload: () => voi
             // Strict check for 13th Salary (Adiantamento or 13o Salario)
             const isTarget13th = descNorm.includes('adiantamento de 13o') || descNorm.includes('13o salario');
             const isIgnored13thDiscount = descNorm.includes('inss') || descNorm.replace(/\./g, '').includes('irrf') || descNorm.includes('pensao alimenticia');
+            const isExcludedAdiantamento = descNorm.includes('desconto de adiantamento de');
 
-            if (isTarget13th && !isIgnored13thDiscount) {
+            if (isTarget13th && !isIgnored13thDiscount && !isExcludedAdiantamento) {
                 if (rendimento > 0) decimoTerceiroValues.push(rendimento);
                 if (desconto > 0) decimoTerceiroValues.push(-desconto);
                 wasCalculated = true;
