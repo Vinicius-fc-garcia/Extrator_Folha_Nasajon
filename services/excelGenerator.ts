@@ -1,3 +1,4 @@
+
 import * as xlsx from 'xlsx';
 import type { PaystubRow, PaystubTotals } from '../types';
 
@@ -56,10 +57,12 @@ export const buildExcel = (rows: PaystubRow[], totals: PaystubTotals): Blob => {
        if (desconto > 0) transporteValues.push(-desconto);
     }
 
-    // Rule: for 13th salary, only sum the main payment and subtract the advance repayment discount.
-    // Ignore taxes (INSS, IRRF) and other deductions (e.g., pensao alimenticia).
+    // Rule: for 13th salary, strictly look for "Adiantamento de 13º" and "13º Salário".
+    // Still need to ignore taxes (INSS, IRRF) that might mention 13th salary.
+    const isTarget13th = descNorm.includes('adiantamento de 13o') || descNorm.includes('13o salario');
     const isIgnored13thDiscount = descNorm.includes('inss') || descNorm.replace(/\./g, '').includes('irrf') || descNorm.includes('pensao alimenticia');
-    if (descNorm.includes('13o') && !isIgnored13thDiscount) {
+    
+    if (isTarget13th && !isIgnored13thDiscount) {
       if (rendimento > 0) decimoTerceiroValues.push(rendimento);
       if (desconto > 0) decimoTerceiroValues.push(-desconto);
     }
@@ -164,8 +167,10 @@ export const buildExcel = (rows: PaystubRow[], totals: PaystubTotals): Blob => {
     const descValue = normalizeText(originalDesc);
     let rowFontColor = null;
 
+    const isTarget13th = descValue.includes('adiantamento de 13o') || descValue.includes('13o salario');
     const isIgnored13thDiscount = descValue.includes('inss') || descValue.replace(/\./g, '').includes('irrf') || descValue.includes('pensao alimenticia');
-    if (descValue.includes("13o") && !isIgnored13thDiscount) {
+
+    if (isTarget13th && !isIgnored13thDiscount) {
         rowFontColor = { rgb: "0070C0" }; // Blue
     } else if (descValue.includes("cesta")) {
         rowFontColor = { rgb: "7030A0" }; // Purple
