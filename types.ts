@@ -14,3 +14,9 @@ export interface ExtractionResult {
   rows: PaystubRow[];
   totals: PaystubTotals;
 }
+
+export interface BatchExtractionResult {
+  fileName: string;
+  result: ExtractionResult | null; // null if processing failed
+  error?: string;
+}
