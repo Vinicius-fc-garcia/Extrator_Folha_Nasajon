@@ -1,8 +1,9 @@
 
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import type { ExtractionResult, PaystubRow } from './types';
+import type { ExtractionResult, PaystubRow, BatchExtractionResult } from './types';
 import { processPdf } from './services/pdfProcessor';
-import { buildExcel } from './services/excelGenerator';
+import { buildExcel, buildBatchExcel } from './services/excelGenerator';
+import { normalizeText, parseCurrency } from './services/calculations';
 
 // --- Helper Icon Components ---
 const UploadIcon: React.FC<{className: string}> = ({ className }) => (
@@ -19,7 +20,7 @@ const DownloadIcon: React.FC<{className: string}> = ({ className }) => (
 
 const SpinnerIcon: React.FC<{className: string}> = ({ className }) => (
   <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={2}></circle>
     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
   </svg>
 );
@@ -122,20 +123,46 @@ const FileUploader: React.FC<{ onFileSelect: (file: File) => void; isProcessing:
   );
 };
 
-// Helpers moved from excelGenerator to be used in UI
-const parseCurrency = (value: string): number => {
-  if (!value || typeof value !== 'string') return 0;
-  return parseFloat(value.replace(/\./g, '').replace(',', '.'));
-};
+const BatchFileUploader: React.FC<{ onFilesSelect: (files: FileList) => void; isProcessing: boolean }> = ({ onFilesSelect, isProcessing }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-const normalizeText = (text: string): string => {
-  if (!text) return '';
-  return text
-    .toLowerCase()
-    .replace(/º/g, 'o')
-    .replace(/ª/g, 'a')
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        onFilesSelect(e.dataTransfer.files);
+    }
+  };
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+        onFilesSelect(e.target.files);
+    }
+  };
+
+  const handleClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  return (
+    <div
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      onClick={handleClick}
+      className={`border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-colors duration-300 ${isProcessing ? 'cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-accent hover:bg-blue-50'}`}
+      aria-disabled={isProcessing}
+    >
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="application/pdf" multiple disabled={isProcessing} />
+      <UploadIcon className="mx-auto h-12 w-12 text-gray-400" />
+      <p className="mt-2 text-sm text-gray-600">
+        <span className="font-semibold text-accent">Clique para escolher múltiplos arquivos</span> ou arraste e solte os PDFs aqui.
+      </p>
+      <p className="mt-1 text-xs text-gray-400">Suporta seleção de múltiplos arquivos (100+)</p>
+    </div>
+  );
 };
 
 const getRowStyle = (description: string): string => {
@@ -346,10 +373,18 @@ const ResultsDisplay: React.FC<{ result: ExtractionResult; onDownload: () => voi
 
 // --- Main App Component ---
 export default function App() {
+  const [mode, setMode] = useState<'single' | 'batch'>('single');
+  
+  // Single Mode State
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('resumo_folha');
+
+  // Batch Mode State
+  const [batchResults, setBatchResults] = useState<BatchExtractionResult[]>([]);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
 
   const handleFileSelect = useCallback(async (file: File) => {
     if (isProcessing) return;
@@ -369,6 +404,33 @@ export default function App() {
     }
   }, [isProcessing]);
 
+  const handleBatchFilesSelect = useCallback(async (files: FileList) => {
+    if (isBatchProcessing) return;
+    setIsBatchProcessing(true);
+    setBatchResults([]);
+    setBatchProgress({ current: 0, total: files.length });
+
+    const results: BatchExtractionResult[] = [];
+    
+    // Process sequentially to avoid overwhelming the browser/PDF.js
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileName = file.name.replace(/\.pdf$/i, '');
+        
+        try {
+            const extractionResult = await processPdf(file);
+            results.push({ fileName, result: extractionResult });
+        } catch (e) {
+            console.error(`Error processing ${file.name}:`, e);
+            results.push({ fileName, result: null, error: e instanceof Error ? e.message : 'Unknown error' });
+        }
+        setBatchProgress(prev => ({ ...prev, current: i + 1 }));
+    }
+
+    setBatchResults(results);
+    setIsBatchProcessing(false);
+  }, [isBatchProcessing]);
+
   const handleDownload = useCallback(() => {
     if (!result) return;
     const excelBlob = buildExcel(result.rows, result.totals);
@@ -381,6 +443,19 @@ export default function App() {
     window.URL.revokeObjectURL(url);
     a.remove();
   }, [result, fileName]);
+
+  const handleBatchDownload = useCallback(() => {
+    if (batchResults.length === 0) return;
+    const excelBlob = buildBatchExcel(batchResults);
+    const url = window.URL.createObjectURL(excelBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Lote_${new Date().toISOString().slice(0,10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  }, [batchResults]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -395,28 +470,101 @@ export default function App() {
             <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
                 <div className="px-4 py-6 sm:px-0">
                     <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-200 max-w-4xl mx-auto">
-                        <FileUploader onFileSelect={handleFileSelect} isProcessing={isProcessing} />
-                       
-                        <div className="mt-8">
-                            {isProcessing && (
-                                <div className="flex flex-col items-center justify-center p-10">
-                                    <SpinnerIcon className="h-12 w-12 text-primary" />
-                                    <p className="mt-4 text-lg text-gray-600">Analisando o PDF, por favor aguarde...</p>
-                                    <p className="mt-1 text-sm text-gray-500">Este processo pode demorar alguns segundos.</p>
-                                </div>
-                            )}
-                            
-                            {error && !isProcessing && (
-                                <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
-                                    <p className="font-bold">Erro na Extração</p>
-                                    <p>{error}</p>
-                                </div>
-                            )}
-                            
-                            {result && !isProcessing && (
-                              <ResultsDisplay result={result} onDownload={handleDownload} />
-                            )}
+                        
+                        {/* Mode Toggle */}
+                        <div className="flex justify-center mb-8">
+                            <div className="bg-gray-100 p-1 rounded-lg inline-flex">
+                                <button
+                                    onClick={() => setMode('single')}
+                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${mode === 'single' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                >
+                                    Arquivo Único
+                                </button>
+                                <button
+                                    onClick={() => setMode('batch')}
+                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${mode === 'batch' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                >
+                                    Processamento em Lote
+                                </button>
+                            </div>
                         </div>
+
+                        {mode === 'single' ? (
+                            <>
+                                <FileUploader onFileSelect={handleFileSelect} isProcessing={isProcessing} />
+                            
+                                <div className="mt-8">
+                                    {isProcessing && (
+                                        <div className="flex flex-col items-center justify-center p-10">
+                                            <SpinnerIcon className="h-12 w-12 text-primary" />
+                                            <p className="mt-4 text-lg text-gray-600">Analisando o PDF, por favor aguarde...</p>
+                                            <p className="mt-1 text-sm text-gray-500">Este processo pode demorar alguns segundos.</p>
+                                        </div>
+                                    )}
+                                    
+                                    {error && !isProcessing && (
+                                        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+                                            <p className="font-bold">Erro na Extração</p>
+                                            <p>{error}</p>
+                                        </div>
+                                    )}
+                                    
+                                    {result && !isProcessing && (
+                                    <ResultsDisplay result={result} onDownload={handleDownload} />
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <BatchFileUploader onFilesSelect={handleBatchFilesSelect} isProcessing={isBatchProcessing} />
+
+                                <div className="mt-8">
+                                    {isBatchProcessing && (
+                                        <div className="flex flex-col items-center justify-center p-10">
+                                            <SpinnerIcon className="h-12 w-12 text-primary" />
+                                            <p className="mt-4 text-lg text-gray-600">Processando arquivos...</p>
+                                            <p className="mt-1 text-sm text-gray-500">{batchProgress.current} de {batchProgress.total} arquivos processados</p>
+                                            <div className="w-full max-w-md mt-4 bg-gray-200 rounded-full h-2.5">
+                                                <div className="bg-primary h-2.5 rounded-full transition-all duration-300" style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}></div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!isBatchProcessing && batchResults.length > 0 && (
+                                        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+                                            <h3 className="text-xl font-bold text-green-800 mb-2">Processamento em Lote Concluído!</h3>
+                                            <p className="text-green-700 mb-6">{batchResults.length} arquivos processados.</p>
+                                            
+                                            <div className="flex justify-center">
+                                                <button
+                                                    onClick={handleBatchDownload}
+                                                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
+                                                >
+                                                    <DownloadIcon className="-ml-1 mr-2 h-5 w-5" />
+                                                    Baixar Planilha Consolidada
+                                                </button>
+                                            </div>
+
+                                            <div className="mt-6 text-left">
+                                                <h4 className="font-semibold text-gray-700 mb-2">Detalhes:</h4>
+                                                <div className="max-h-60 overflow-y-auto bg-white rounded border border-gray-200 p-2 text-sm">
+                                                    {batchResults.map((res, idx) => (
+                                                        <div key={idx} className={`flex justify-between py-1 px-2 ${idx % 2 === 0 ? 'bg-gray-50' : ''}`}>
+                                                            <span className="truncate max-w-xs" title={res.fileName}>{res.fileName}</span>
+                                                            {res.result ? (
+                                                                <span className="text-green-600 font-medium">Sucesso</span>
+                                                            ) : (
+                                                                <span className="text-red-600 font-medium" title={res.error}>Erro</span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
