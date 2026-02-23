@@ -1,23 +1,7 @@
 
 import * as xlsx from 'xlsx';
-import type { PaystubRow, PaystubTotals } from '../types';
-
-// Helper to parse currency string "1.234,56" into a number 1234.56
-const parseCurrency = (value: string): number => {
-  if (!value || typeof value !== 'string') return 0;
-  return parseFloat(value.replace(/\./g, '').replace(',', '.'));
-};
-
-// Helper to normalize text (lowercase, remove accents, handle ordinals)
-const normalizeText = (text: string): string => {
-  if (!text) return '';
-  return text
-    .toLowerCase()
-    .replace(/º/g, 'o')
-    .replace(/ª/g, 'a')
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-};
+import type { PaystubRow, PaystubTotals, BatchExtractionResult } from '../types';
+import { calculateTotals, normalizeText, parseCurrency } from './calculations';
 
 export const buildExcel = (rows: PaystubRow[], totals: PaystubTotals): Blob => {
   const wb = xlsx.utils.book_new();
@@ -37,43 +21,14 @@ export const buildExcel = (rows: PaystubRow[], totals: PaystubTotals): Blob => {
   }
   
   // --- Summary Table Calculation ---
-  const alimentacaoValues: number[] = [];
-  const transporteValues: number[] = [];
-  const decimoTerceiroValues: number[] = [];
-
-  rows.forEach(row => {
-    const descNorm = normalizeText(row.Descrição);
-    const rendimento = parseCurrency(row.Rendimentos);
-    const desconto = parseCurrency(row.Descontos);
-
-    if (descNorm.includes('alimentacao') || descNorm.includes('cesta')) {
-      if (rendimento > 0) alimentacaoValues.push(rendimento);
-      if (desconto > 0) alimentacaoValues.push(-desconto);
-    }
-    
-    // Rule: ignore 'transporte' if description contains '%'
-    if (descNorm.includes('transporte') && !row.Descrição.includes('%')) {
-       if (rendimento > 0) transporteValues.push(rendimento);
-       if (desconto > 0) transporteValues.push(-desconto);
-    }
-
-    // Rule: for 13th salary, strictly look for "Adiantamento de 13º" and "13º Salário".
-    // Exceptions:
-    // 1. Ignore taxes (INSS, IRRF) that might mention 13th salary.
-    // 2. Ignore "Desconto de Adiantamento de..."
-    const isTarget13th = descNorm.includes('adiantamento de 13o') || descNorm.includes('13o salario');
-    const isIgnored13thDiscount = descNorm.includes('inss') || descNorm.replace(/\./g, '').includes('irrf') || descNorm.includes('pensao alimenticia');
-    const isExcludedAdiantamento = descNorm.includes('desconto de adiantamento de');
-    
-    if (isTarget13th && !isIgnored13thDiscount && !isExcludedAdiantamento) {
-      if (rendimento > 0) decimoTerceiroValues.push(rendimento);
-      if (desconto > 0) decimoTerceiroValues.push(-desconto);
-    }
-  });
-
-  const alimentacaoSum = alimentacaoValues.reduce((sum, val) => sum + val, 0);
-  const transporteSum = transporteValues.reduce((sum, val) => sum + val, 0);
-  const decimoTerceiroSum = decimoTerceiroValues.reduce((sum, val) => sum + val, 0);
+  const { 
+    alimentacaoValues, 
+    transporteValues, 
+    decimoTerceiroValues,
+    alimentacaoSum,
+    transporteSum,
+    decimoTerceiroSum
+  } = calculateTotals(rows);
 
   // Add summary table to worksheet data
   ws_data.push([]); // Blank line
@@ -202,6 +157,61 @@ export const buildExcel = (rows: PaystubRow[], totals: PaystubTotals): Blob => {
 
   xlsx.utils.book_append_sheet(wb, ws, 'Resumo_Rubricas');
 
+  const wbout = xlsx.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([wbout], { type: 'application/octet-stream' });
+};
+
+export const buildBatchExcel = (results: BatchExtractionResult[]): Blob => {
+  const wb = xlsx.utils.book_new();
+  const ws_data = [];
+
+  // Header
+  // Col A "Cond", Col B "Salário", Col C "Alimentação", Col D "Transporte"
+  ws_data.push(["Cond", "Salário", "Alimentação", "Transporte"]);
+
+  results.forEach(item => {
+    if (!item.result) return; // Skip failed files or handle them differently? User said "Caso algum valor esteja zerado... não preencher". Failed files might just be skipped or logged.
+
+    const { rows, totals } = item.result;
+    const { alimentacaoSum, transporteSum } = calculateTotals(rows);
+    
+    // Parse Salário Líquido Total
+    const salarioLiquidoStr = totals['Salário Líquido Total'];
+    const salarioLiquido = salarioLiquidoStr ? parseCurrency(salarioLiquidoStr) : 0;
+
+    // Prepare row data
+    // If value is 0, leave blank (undefined or empty string)
+    const rowData = [
+      item.fileName,
+      salarioLiquido !== 0 ? { v: salarioLiquido, t: 'n', z: '#,##0.00' } : '',
+      alimentacaoSum !== 0 ? { v: alimentacaoSum, t: 'n', z: '#,##0.00' } : '',
+      transporteSum !== 0 ? { v: transporteSum, t: 'n', z: '#,##0.00' } : ''
+    ];
+
+    ws_data.push(rowData);
+  });
+
+  const ws = xlsx.utils.aoa_to_sheet(ws_data);
+
+  // Auto-fit columns (approximate)
+  const colWidths = [
+    { wch: 40 }, // Cond (Filename)
+    { wch: 15 }, // Salário
+    { wch: 15 }, // Alimentação
+    { wch: 15 }, // Transporte
+  ];
+  ws['!cols'] = colWidths;
+
+  // Header Style
+  const headerRange = xlsx.utils.decode_range(ws['!ref'] || "A1:D1");
+  for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
+    const address = xlsx.utils.encode_col(C) + "1";
+    if (!ws[address]) continue;
+    if (!ws[address].s) ws[address].s = {};
+    ws[address].s.font = { bold: true };
+  }
+
+  xlsx.utils.book_append_sheet(wb, ws, 'Batch_Export');
   const wbout = xlsx.write(wb, { bookType: 'xlsx', type: 'array' });
   return new Blob([wbout], { type: 'application/octet-stream' });
 };
