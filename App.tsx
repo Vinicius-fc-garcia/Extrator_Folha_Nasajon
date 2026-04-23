@@ -3,7 +3,7 @@ import React, { useState, useCallback, useRef, useMemo } from 'react';
 import type { ExtractionResult, PaystubRow, BatchExtractionResult } from './types';
 import { processPdf } from './services/pdfProcessor';
 import { buildExcel, buildBatchExcel } from './services/excelGenerator';
-import { normalizeText, parseCurrency } from './services/calculations';
+import { calculateTotals, normalizeText, parseCurrency } from './services/calculations';
 
 // --- Helper Icon Components ---
 const UploadIcon: React.FC<{className: string}> = ({ className }) => (
@@ -548,16 +548,31 @@ export default function App() {
                                             <div className="mt-6 text-left">
                                                 <h4 className="font-semibold text-gray-700 mb-2">Detalhes:</h4>
                                                 <div className="max-h-60 overflow-y-auto bg-white rounded border border-gray-200 p-2 text-sm">
-                                                    {batchResults.map((res, idx) => (
-                                                        <div key={idx} className={`flex justify-between py-1 px-2 ${idx % 2 === 0 ? 'bg-gray-50' : ''}`}>
-                                                            <span className="truncate max-w-xs" title={res.fileName}>{res.fileName}</span>
-                                                            {res.result ? (
-                                                                <span className="text-green-600 font-medium">Sucesso</span>
-                                                            ) : (
-                                                                <span className="text-red-600 font-medium" title={res.error}>Erro</span>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                    {batchResults.map((res, idx) => {
+                                                        let has13th = false;
+                                                        if (res.result) {
+                                                            const totals = calculateTotals(res.result.rows);
+                                                            if (totals.decimoTerceiroSum !== 0) has13th = true;
+                                                        }
+                                                        return (
+                                                            <div key={idx} className={`flex justify-between items-center py-2 px-3 ${idx % 2 === 0 ? 'bg-gray-50' : ''}`}>
+                                                                <div className="flex items-center space-x-2 truncate">
+                                                                    <span className="truncate max-w-[16rem]" title={res.fileName}>{res.fileName}</span>
+                                                                    {has13th && (
+                                                                        <span title="Contém 13º Salário" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                            <AlertIcon className="h-3 w-3 mr-1 animate-blink" />
+                                                                            13º
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {res.result ? (
+                                                                    <span className="text-green-600 font-medium whitespace-nowrap">Sucesso</span>
+                                                                ) : (
+                                                                    <span className="text-red-600 font-medium whitespace-nowrap" title={res.error}>Erro</span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         </div>
