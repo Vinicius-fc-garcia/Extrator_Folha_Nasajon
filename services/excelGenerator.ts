@@ -166,14 +166,14 @@ export const buildBatchExcel = (results: BatchExtractionResult[]): Blob => {
   const ws_data = [];
 
   // Header
-  // Col A "Cond", Col B "Salário", Col C "Alimentação", Col D "Transporte"
-  ws_data.push(["Cond", "Salário", "Alimentação", "Transporte"]);
+  // Col A "Cond", Col B "Salário", Col C "Alimentação", Col D "Transporte", Col E "13º Salário"
+  ws_data.push(["Cond", "Salário", "Alimentação", "Transporte", "13º Salário"]);
 
   results.forEach(item => {
     if (!item.result) return; // Skip failed files or handle them differently? User said "Caso algum valor esteja zerado... não preencher". Failed files might just be skipped or logged.
 
     const { rows, totals } = item.result;
-    const { alimentacaoSum, transporteSum } = calculateTotals(rows);
+    const { alimentacaoSum, transporteSum, decimoTerceiroSum } = calculateTotals(rows);
     
     // Parse Salário Líquido Total
     const salarioLiquidoStr = totals['Salário Líquido Total'];
@@ -185,7 +185,8 @@ export const buildBatchExcel = (results: BatchExtractionResult[]): Blob => {
       item.fileName,
       salarioLiquido !== 0 ? { v: salarioLiquido, t: 'n', z: '#,##0.00' } : '',
       alimentacaoSum !== 0 ? { v: alimentacaoSum, t: 'n', z: '#,##0.00' } : '',
-      transporteSum !== 0 ? { v: transporteSum, t: 'n', z: '#,##0.00' } : ''
+      transporteSum !== 0 ? { v: transporteSum, t: 'n', z: '#,##0.00' } : '',
+      decimoTerceiroSum !== 0 ? { v: decimoTerceiroSum, t: 'n', z: '#,##0.00' } : ''
     ];
 
     ws_data.push(rowData);
@@ -199,11 +200,12 @@ export const buildBatchExcel = (results: BatchExtractionResult[]): Blob => {
     { wch: 15 }, // Salário
     { wch: 15 }, // Alimentação
     { wch: 15 }, // Transporte
+    { wch: 15 }, // 13º Salário
   ];
   ws['!cols'] = colWidths;
 
   // Header Style
-  const headerRange = xlsx.utils.decode_range(ws['!ref'] || "A1:D1");
+  const headerRange = xlsx.utils.decode_range(ws['!ref'] || "A1:E1");
   for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
     const address = xlsx.utils.encode_col(C) + "1";
     if (!ws[address]) continue;
