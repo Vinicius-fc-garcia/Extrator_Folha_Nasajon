@@ -73,3 +73,68 @@ export const calculateTotals = (rows: PaystubRow[]): CalculatedValues => {
     decimoTerceiroValues
   };
 };
+
+export const calculateReferences = (selectedYearMonth: string): { salarioRef: string; beneficioRef: string } => {
+  if (!selectedYearMonth || !selectedYearMonth.includes('-')) {
+    return { salarioRef: '', beneficioRef: '' };
+  }
+  const [yearStr, monthStr] = selectedYearMonth.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+
+  const salarioRef = `${String(month).padStart(2, '0')}/${String(year).slice(-2)}`;
+
+  let nextMonth = month + 1;
+  let nextYear = year;
+  if (nextMonth > 12) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+  const beneficioRef = `${String(nextMonth).padStart(2, '0')}/${String(nextYear).slice(-2)}`;
+
+  return { salarioRef, beneficioRef };
+};
+
+export interface AdjustedPaystubValues {
+  salario: number;
+  alimentacao: number;
+  transporte: number;
+  isSalarioNegativo: boolean;
+  alimentacaoDeducted: boolean;
+  transporteDeducted: boolean;
+}
+
+export const adjustPaystubValues = (
+  rawSalario: number,
+  rawAlimentacao: number,
+  rawTransporte: number
+): AdjustedPaystubValues => {
+  let salario = rawSalario;
+  let alimentacao = rawAlimentacao;
+  let transporte = rawTransporte;
+  let alimentacaoDeducted = false;
+  let transporteDeducted = false;
+
+  // Rule: when alimentacao or transporte is negative, set as Ausente (0)
+  // and deduct the difference from salario
+  if (alimentacao < 0) {
+    salario += alimentacao; // alimentacao is negative, so adding it deducts the value
+    alimentacao = 0; // colocado como Ausente
+    alimentacaoDeducted = true;
+  }
+
+  if (transporte < 0) {
+    salario += transporte; // transporte is negative, so adding it deducts the value
+    transporte = 0; // colocado como Ausente
+    transporteDeducted = true;
+  }
+
+  return {
+    salario,
+    alimentacao,
+    transporte,
+    isSalarioNegativo: salario < 0,
+    alimentacaoDeducted,
+    transporteDeducted,
+  };
+};

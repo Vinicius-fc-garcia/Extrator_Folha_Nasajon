@@ -9,9 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "jspdf": "^4.2.1",
+    "pdfjs-dist": "4.0.189",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "pdfjs-dist": "4.0.189",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
