@@ -63,6 +63,203 @@ const AlertIcon: React.FC<{className: string}> = ({ className }) => (
     </svg>
 );
 
+const SearchIcon: React.FC<{className?: string}> = ({ className = "h-4 w-4" }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+  </svg>
+);
+
+const CloseIcon: React.FC<{className?: string}> = ({ className = "h-4 w-4" }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+interface WindowsSearchModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const WindowsSearchModal: React.FC<WindowsSearchModalProps> = ({ isOpen, onClose }) => {
+  const [inputText, setInputText] = useState('');
+  const [includePdf, setIncludePdf] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  const formattedQuery = useMemo(() => {
+    const lines = inputText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    if (lines.length === 0) return '';
+
+    return lines
+      .map(code => {
+        if (!includePdf) return code;
+        return code.toLowerCase().endsWith('.pdf') ? code : `${code}.pdf`;
+      })
+      .join(' OR ');
+  }, [inputText, includePdf]);
+
+  const itemCount = useMemo(() => {
+    return inputText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0).length;
+  }, [inputText]);
+
+  const handleCopy = useCallback(() => {
+    if (!formattedQuery) return;
+    navigator.clipboard.writeText(formattedQuery).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [formattedQuery]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-xs flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg overflow-hidden transition-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/60">
+          <div className="flex items-center space-x-2">
+            <SearchIcon className="h-4 w-4 text-gray-600" />
+            <h3 className="text-sm font-semibold text-gray-900">
+              Pesquisa de Arquivos no Windows
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
+            title="Fechar"
+          >
+            <CloseIcon className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-5 space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="client-codes-textarea" className="text-xs font-semibold text-gray-700">
+                Códigos dos Clientes (um por linha)
+              </label>
+              {itemCount > 0 && (
+                <span className="text-[11px] text-gray-500 font-mono">
+                  {itemCount} {itemCount === 1 ? 'código' : 'códigos'}
+                </span>
+              )}
+            </div>
+            <textarea
+              id="client-codes-textarea"
+              rows={5}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder={"003\n009\n011"}
+              className="w-full px-3 py-2 text-sm font-mono border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y"
+              autoFocus
+            />
+          </div>
+
+          {/* Controls: .pdf toggle (pre-selected by default) */}
+          <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+            <span className="text-xs text-gray-600">Extensão dos arquivos:</span>
+            <button
+              type="button"
+              onClick={() => setIncludePdf(prev => !prev)}
+              className={`inline-flex items-center px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                includePdf
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+              }`}
+              title="Incluir extensão .pdf nos nomes de arquivos para busca"
+            >
+              <span className="mr-1.5">{includePdf ? '✓' : ''}</span>
+              .pdf
+            </button>
+          </div>
+
+          {/* Formatted Output */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Texto para colar na pesquisa do Windows:
+            </label>
+            <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 break-all max-h-28 overflow-y-auto select-all min-h-[42px] flex items-center">
+              {formattedQuery ? (
+                formattedQuery
+              ) : (
+                <span className="text-gray-400 italic">
+                  O resultado aparecerá aqui (ex: 003.pdf OR 009.pdf OR 011.pdf)...
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="flex items-center justify-between px-5 py-3.5 bg-gray-50 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={() => setInputText('')}
+            disabled={!inputText}
+            className="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-30 transition-colors"
+          >
+            Limpar
+          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 rounded-md hover:bg-gray-200/60 transition-colors"
+            >
+              Fechar
+            </button>
+            <button
+              type="button"
+              onClick={handleCopy}
+              disabled={!formattedQuery}
+              className={`inline-flex items-center px-4 py-1.5 rounded-md text-xs font-medium text-white shadow-xs transition-colors ${
+                copied
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-primary hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed'
+              }`}
+            >
+              {copied ? (
+                <>
+                  <CheckIcon className="h-3.5 w-3.5 mr-1" />
+                  Copiado!
+                </>
+              ) : (
+                <>
+                  <CopyIcon className="h-3.5 w-3.5 mr-1" />
+                  Copiar Pesquisa
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 // --- UI Components ---
 const ThirteenthSalaryWarning: React.FC = () => {
@@ -732,6 +929,9 @@ export default function App() {
   const [batchProgress, setBatchProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
   const [batchTab, setBatchTab] = useState<'list' | 'cards'>('list');
 
+  // Windows Search Query Modal State
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+
   const handleExportPdfSingle = useCallback(() => {
     if (!result) return;
     const { rows, totals } = result;
@@ -885,9 +1085,20 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
         <header className="bg-white shadow-sm">
-            <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-                <h1 className="text-3xl font-bold leading-tight text-gray-900">Extrator — Resumo Geral da Folha (Nasajon)</h1>
-                <p className="mt-1 text-sm text-gray-500">Faça upload do PDF da folha para extrair o Resumo Geral, calcular totais e exportar a folha de classificação em PDF e Excel.</p>
+            <div className="max-w-7xl mx-auto py-5 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold leading-tight text-gray-900">Extrator — Resumo Geral da Folha (Nasajon)</h1>
+                    <p className="mt-1 text-sm text-gray-500">Faça upload do PDF da folha para extrair o Resumo Geral, calcular totais e exportar a folha de classificação em PDF e Excel.</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setIsSearchModalOpen(true)}
+                    className="inline-flex items-center self-start sm:self-center px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 hover:text-gray-900 border border-gray-200 rounded-md transition-colors shadow-2xs whitespace-nowrap"
+                    title="Abrir gerador de pesquisa para Windows"
+                >
+                    <SearchIcon className="h-3.5 w-3.5 mr-1.5 text-gray-500" />
+                    Busca no Windows
+                </button>
             </div>
         </header>
 
@@ -1196,6 +1407,12 @@ export default function App() {
                 </div>
             </div>
         </main>
+
+        {/* Modal de busca formatada para o Windows */}
+        <WindowsSearchModal
+            isOpen={isSearchModalOpen}
+            onClose={() => setIsSearchModalOpen(false)}
+        />
     </div>
   );
 }
