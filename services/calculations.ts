@@ -138,3 +138,51 @@ export const adjustPaystubValues = (
     transporteDeducted,
   };
 };
+
+/**
+ * Specifically for PDF export and classification card preview:
+ * Retira do valor do salário o valor de alimentação e transporte (total da folha menos alimentação e transporte compõem o salário).
+ * Mantém as regras de valores ausentes (<= 0 -> Ausente) e de deduzir a diferença do salário quando alimentação ou transporte forem negativos.
+ */
+export const adjustPaystubValuesForPdf = (
+  rawSalario: number,
+  rawAlimentacao: number,
+  rawTransporte: number
+): AdjustedPaystubValues => {
+  let salario = rawSalario;
+  let alimentacao = rawAlimentacao;
+  let transporte = rawTransporte;
+  let alimentacaoDeducted = false;
+  let transporteDeducted = false;
+
+  // Deduct alimentacao:
+  // If positive, deduct from salary.
+  // If negative, deduct difference from salary and set as Ausente (0).
+  if (alimentacao > 0) {
+    salario -= alimentacao;
+  } else if (alimentacao < 0) {
+    salario += alimentacao; // negative, so adding it deducts the value
+    alimentacao = 0; // Ausente
+    alimentacaoDeducted = true;
+  }
+
+  // Deduct transporte:
+  // If positive, deduct from salary.
+  // If negative, deduct difference from salary and set as Ausente (0).
+  if (transporte > 0) {
+    salario -= transporte;
+  } else if (transporte < 0) {
+    salario += transporte; // negative, so adding it deducts the value
+    transporte = 0; // Ausente
+    transporteDeducted = true;
+  }
+
+  return {
+    salario,
+    alimentacao,
+    transporte,
+    isSalarioNegativo: salario < 0,
+    alimentacaoDeducted,
+    transporteDeducted,
+  };
+};
