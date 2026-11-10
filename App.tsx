@@ -3,7 +3,7 @@ import React, { useState, useCallback, useRef, useMemo } from 'react';
 import type { ExtractionResult, PaystubRow, BatchExtractionResult } from './types';
 import { processPdf } from './services/pdfProcessor';
 import { buildExcel, buildBatchExcel } from './services/excelGenerator';
-import { calculateTotals, normalizeText, parseCurrency, calculateReferences, adjustPaystubValues } from './services/calculations';
+import { calculateTotals, normalizeText, parseCurrency, calculateReferences, adjustPaystubValues, adjustPaystubValuesForPdf } from './services/calculations';
 import { exportClassificationPdf, exportBatchClassificationPdf, DEFAULT_PDF_OFFSETS } from './services/pdfGenerator';
 
 // --- Helper Icon Components ---
@@ -651,7 +651,7 @@ const ResultsDisplay: React.FC<{
 
     const { salario, alimentacao, transporte, isSalarioNegativo, alimentacaoDeducted, transporteDeducted } = useMemo(() => {
         const rawSalario = result.totals['Salário Líquido Total'] ? parseCurrency(result.totals['Salário Líquido Total']) : 0;
-        return adjustPaystubValues(rawSalario, alimentacaoSum, transporteSum);
+        return adjustPaystubValuesForPdf(rawSalario, alimentacaoSum, transporteSum);
     }, [result.totals, alimentacaoSum, transporteSum]);
 
     return (
@@ -937,7 +937,7 @@ export default function App() {
     const { rows, totals } = result;
     const { alimentacaoSum, transporteSum } = calculateTotals(rows);
     const rawSalario = totals['Salário Líquido Total'] ? parseCurrency(totals['Salário Líquido Total']) : 0;
-    const { salario, alimentacao, transporte } = adjustPaystubValues(rawSalario, alimentacaoSum, transporteSum);
+    const { salario, alimentacao, transporte } = adjustPaystubValuesForPdf(rawSalario, alimentacaoSum, transporteSum);
     exportClassificationPdf(
       fileName,
       {
@@ -959,7 +959,7 @@ export default function App() {
         const { rows, totals } = item.result!;
         const { alimentacaoSum, transporteSum } = calculateTotals(rows);
         const rawSalario = totals['Salário Líquido Total'] ? parseCurrency(totals['Salário Líquido Total']) : 0;
-        const { salario, alimentacao, transporte } = adjustPaystubValues(rawSalario, alimentacaoSum, transporteSum);
+        const { salario, alimentacao, transporte } = adjustPaystubValuesForPdf(rawSalario, alimentacaoSum, transporteSum);
         return {
           fileName: item.fileName,
           data: {
@@ -1072,7 +1072,7 @@ export default function App() {
         const { rows, totals } = item.result!;
         const { alimentacaoSum, transporteSum } = calculateTotals(rows);
         const rawSalario = totals['Salário Líquido Total'] ? parseCurrency(totals['Salário Líquido Total']) : 0;
-        const adjusted = adjustPaystubValues(rawSalario, alimentacaoSum, transporteSum);
+        const adjusted = adjustPaystubValuesForPdf(rawSalario, alimentacaoSum, transporteSum);
         return {
           fileName: item.fileName,
           salario: adjusted.salario,
@@ -1304,7 +1304,7 @@ export default function App() {
                                                                     const { rows, totals } = res.result!;
                                                                     const { alimentacaoSum, transporteSum } = calculateTotals(rows);
                                                                     const rawSalario = totals['Salário Líquido Total'] ? parseCurrency(totals['Salário Líquido Total']) : 0;
-                                                                    const { salario, alimentacao, transporte, isSalarioNegativo } = adjustPaystubValues(rawSalario, alimentacaoSum, transporteSum);
+                                                                    const { salario, alimentacao, transporte, isSalarioNegativo } = adjustPaystubValuesForPdf(rawSalario, alimentacaoSum, transporteSum);
                                                                     
                                                                     return (
                                                                         <div key={idx} className={`bg-white p-4 rounded-lg shadow-sm border ${isSalarioNegativo ? 'border-red-400 ring-2 ring-red-300' : 'border-gray-200'} flex flex-col items-center`}>
